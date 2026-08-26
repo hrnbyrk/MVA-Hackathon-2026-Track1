@@ -1,0 +1,168 @@
+# =========================================================================
+# RARE DISEASE, REAL KID: MVA HACKATHON 2026 - TRACK 1 PIPELINE
+# Description: Targeted WGS VCF filtering and genotype extraction
+# Target Genes: BUB1B, CEP57, TRIP13 (MVA Syndrome Panel)
+# =========================================================================
+
+# 1. ENVIRONMENT SETUP & PACKAGE INSTALLATION -----------------------------
+# Install BiocManager if missing
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+# Install necessary Bioconductor packages silently
+BiocManager::install(c("VariantAnnotation", "TxDb.Hsapiens.UCSC.hg38.knownGene", 
+                       "org.Hs.eg.db", "GenomicRanges"), ask = FALSE)
+
+# Install reticulate for Python integration
+if (!requireNamespace("reticulate", quietly = TRUE)) {
+  install.packages("reticulate")
+}
+library(reticulate)
+
+# 2. HUGGING FACE DATA DOWNLOAD -------------------------------------------
+# Set up isolated Miniconda environment to avoid OS path conflicts
+# install_miniconda() # Run once if miniconda is not installed
+use_condaenv("r-reticulate", required = TRUE)
+# py_install("huggingface_hub") # Run once to install the module
+
+hf <- import("huggingface_hub")
+token <- "YOUR_HF_TOKEN" # NOTE: Replace with your actual Hugging Face token
+
+print("Downloading dataset files...")
+# Uncomment below lines to download files if not already downloaded
+# hf$hf_hub_download(repo_id="SageBio/mva-hackathon-2026-data", filename="WGS_EX2312012_HGWCNDSX7.vcf.gz", repo_type="dataset", local_dir="./data", token=token)
+# hf$hf_hub_download(repo_id="SageBio/mva-hackathon-2026-data", filename="WGS_EX2312012_HGWCNDSX7.vcf.gz.tbi", repo_type="dataset", local_dir="./data", token=token)
+
+vcf_file <- "./data/WGS_EX2312012_HGWCNDSX7.vcf.gz"
+
+# 3. GENOMIC SUBSETTING ---------------------------------------------------
+library(VariantAnnotation)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library(org.Hs.eg.db)
+library(GenomicRanges)
+
+# Define target genes associated with MVA
+target_genes <- c("BUB1B", "CEP57", "TRIP13")
+
+# Get Entrez IDs
+gene_ids <- select(org.Hs.eg.db, keys=target_genes, keytype="SYMBOL", columns="ENTREZID")
+
+# Extract coordinates from hg38 reference
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+gene_coords <- genes(txdb, filter=list(gene_id=gene_ids$ENTREZID))
+
+# Harmonize chromosome naming (Translate UCSC 'chr1' to NCBI '1' format)
+seqlevelsStyle(gene_coords) <- "NCBI"
+
+# 4. TARGETED VCF READING -------------------------------------------------
+# Create read parameters based on gene coordinates
+param <- ScanVcfParam(which = gene_coords)
+
+print("Filtering target gene regions from the VCF file...")
+targeted_vcf <- readVcf(vcf_file, "hg38", param=param)
+
+print(paste("Filtered Variant Count:", length(rowRanges(targeted_vcf))))
+
+# 5. GENOTYPE (GT) EXTRACTION & PRIORITIZATION ----------------------------
+# Extract proband genotype
+genotypes <- geno(targeted_vcf)$GT
+
+# Compile final variant table
+detailed_table <- data.frame(
+  Chromosome = seqnames(rowRanges(targeted_vcf)),
+  Position = start(rowRanges(targeted_vcf)),
+  ID = rownames(genotypes),
+  REF = as.character(ref(targeted_vcf)),
+  ALT = as.character(unlist(alt(targeted_vcf))),
+  Quality = qual(targeted_vcf),
+  Genotype = genotypes[,1] 
+)
+
+# Clean up row names
+rownames(detailed_table) <- NULL
+
+# Filter for alternate alleles (0/1 heterozygous or 1/1 homozygous)
+suspicious_variants <- subset(detailed_table, Genotype != "0/0")
+
+print("--- FULL LIST OF SUSPICIOUS VARIANTS IN THE PROBAND ---")
+
+print(suspicious_variants)
+
+# =========================================================================
+# RARE DISEASE, REAL KID: MVA HACKATHON 2026 - TRACK 1 PIPELINE (FINAL)
+# Description: Targeted WGS VCF filtering, Genotype (GT) extraction,
+#              and Dual-Model Filtering (Homozygous & Compound Heterozygous)
+# Target Genes: BUB1B, CEP57, TRIP13 (MVA Syndrome Panel)
+# =========================================================================
+
+# 1. ENVIRONMENT SETUP & PACKAGE INSTALLATION -----------------------------
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+BiocManager::install(c("VariantAnnotation", "TxDb.Hsapiens.UCSC.hg38.knownGene", 
+                       "org.Hs.eg.db", "GenomicRanges"), ask = FALSE)
+
+if (!requireNamespace("reticulate", quietly = TRUE)) {
+  install.packages("reticulate")
+}
+library(reticulate)
+
+# 2. HUGGING FACE DATA DOWNLOAD -------------------------------------------
+use_condaenv("r-reticulate", required = TRUE)
+hf <- import("huggingface_hub")
+token <- "YOUR_HF_TOKEN" # Replace with your actual Hugging Face token
+
+# vcf_file <- "./data/WGS_EX2312012_HGWCNDSX7.vcf.gz"
+
+# 3. GENOMIC SUBSETTING ---------------------------------------------------
+library(VariantAnnotation)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library(org.Hs.eg.db)
+library(GenomicRanges)
+
+target_genes <- c("BUB1B", "CEP57", "TRIP13")
+gene_ids <- select(org.Hs.eg.db, keys=target_genes, keytype="SYMBOL", columns="ENTREZID")
+
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+gene_coords <- genes(txdb, filter=list(gene_id=gene_ids$ENTREZID))
+seqlevelsStyle(gene_coords) <- "NCBI"
+
+# 4. TARGETED VCF READING -------------------------------------------------
+param <- ScanVcfParam(which = gene_coords)
+targeted_vcf <- readVcf("./data/WGS_EX2312012_HGWCNDSX7.vcf.gz", "hg38", param=param)
+
+# 5. GENOTYPE & ANNOTATION EXTRACTION -------------------------------------
+genotypes <- geno(targeted_vcf)$GT
+alt_aleller <- sapply(alt(targeted_vcf), function(x) paste(as.character(x), collapse=","))
+
+detailed_table <- data.frame(
+  Chromosome = seqnames(rowRanges(targeted_vcf)),
+  Position = start(rowRanges(targeted_vcf)),
+  ID = rownames(genotypes),
+  REF = as.character(ref(targeted_vcf)),
+  ALT = alt_aleller,
+  Quality = qual(targeted_vcf),
+  Genotype = genotypes[,1] 
+)
+rownames(detailed_table) <- NULL
+
+# 6. DUAL-MODEL FILTERING STRATEGY ----------------------------------------
+
+# MODEL A: Homozygous (1/1) Recessive Filter
+homozygous_variants <- subset(detailed_table, Genotype == "1/1")
+print("--- MODEL A: HOMOZYGOUS CANDIDATES (1/1) ---")
+print(homozygous_variants)
+
+# MODEL B: Compound Heterozygous (0/1 + 0/1) Filter
+# Filter for reliable quality heterozygotics
+heterozygous_variants <- subset(detailed_table, Genotype == "0/1" & Quality > 100)
+print("--- MODEL B: RELIABLE HETEROZYGOUS CANDIDATES (0/1) ---")
+print(heterozygous_variants)
+
+# Specifically checking BUB1B region (Chromosome 15) for compound heterozygosity
+bub1b_compound_candidates <- subset(heterozygous_variants, Chromosome == "15")
+print("--- CHROMOSOME 15 (BUB1B) COMPOUND HETEROZYGOUS PAIRS ---")
+print(bub1b_compound_candidates[, c("Position", "REF", "ALT", "Quality")])
+
