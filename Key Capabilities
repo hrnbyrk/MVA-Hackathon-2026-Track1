@@ -1,0 +1,7 @@
+Memory-Efficient WGS Processing: Targeted RAM-loading of specific genomic ranges instead of parsing the entire 315MB VCF.
+
+Cross-Language Integration: Executing Python-based Hugging Face API downloads seamlessly within RStudio using reticulate.
+
+Automated Naming Harmonization: On-the-fly conversion of chromosome nomenclature between UCSC (chr1) and NCBI/Ensembl (1) formats.
+
+Precision Genotype (GT) Isolation: Direct extraction and filtering of homozygous (1/1) structural mutations from complex VCF annotations.
