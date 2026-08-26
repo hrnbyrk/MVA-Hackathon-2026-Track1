@@ -55,3 +55,18 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 }
 BiocManager::install(c("VariantAnnotation", "TxDb.Hsapiens.UCSC.hg38.knownGene", "org.Hs.eg.db", "GenomicRanges"), ask = FALSE)
 install.packages("reticulate")
+
+---
+
+### ⚙️ Built-in Error Handling
+The pipeline features resilient workarounds for common bioinformatics bottlenecks:
+1. **OS-Level Python Path Conflicts:** Forced installation of an isolated `r-reticulate` Miniconda environment to bypass Windows Store aliases.
+2. **Dataset 403 Forbidden Access:** Leveraged the official `huggingface_hub` API in Python instead of standard HTTP `GET` to pass secure tokens.
+3. **Chromosome Nomenclature Mismatches:** Implementation of `seqlevelsStyle() <- "NCBI"` to dynamically translate UCSC coordinates prior to VCF scanning.
+
+---
+
+### 📄 License & Compliance
+*   **License:** This repository's code is available under the MIT License.
+*   **Data Usage:** The underlying clinical and genomic data provided by Sage Bionetworks and the MVA Society is licensed under **CC-BY 4.0**[cite: 2].
+*   **Privacy:** All patient data handling strictly adheres to the WCG IRB protocol (#20252010). All intermediate raw data files must be deleted from local environments post-hackathon as per the challenge rules[cite: 2].
